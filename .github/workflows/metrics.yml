@@ -1,8 +1,8 @@
 # Visit https://github.com/lowlighter/metrics/blob/master/action.yml for full reference
 name: Metrics
 on:
-  # Schedule updates (each hour)
-  schedule: [{cron: "0 * * * *"}]
+  # Schedule updates (daily).
+  schedule: [{cron: "0 6 * * *"}]
   # Lines below let you run workflow manually and on each commit
   workflow_dispatch:
   push: {branches: ["master", "main"]}
@@ -31,11 +31,11 @@ jobs:
           plugin_languages_analysis_timeout: 15
           plugin_languages_categories: markup, programming
           plugin_languages_colors: github
-          plugin_languages_limit: 14
+          plugin_languages_limit: 8
           plugin_languages_recent_categories: markup, programming
           plugin_languages_recent_days: 14
           plugin_languages_recent_load: 300
-          plugin_languages_sections: most-used,recent
+          plugin_languages_sections: most-used
           plugin_languages_skipped: iSproggler
           plugin_languages_threshold: 0%
           plugin_notable: yes
@@ -43,3 +43,4 @@ jobs:
           plugin_notable_types: commit
           repositories: 40
           repositories_batch: 40
+          output_condition: data-changed
