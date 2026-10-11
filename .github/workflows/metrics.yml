@@ -44,3 +44,6 @@ jobs:
           repositories: 40
           repositories_batch: 40
           output_condition: data-changed
+          plugins_errors_fatal: yes
+          retries: 3
+          retries_delay: 60
