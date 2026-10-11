@@ -6,11 +6,21 @@ on:
   # Lines below let you run workflow manually and on each commit
   workflow_dispatch:
   push: {branches: ["master", "main"]}
+permissions:
+  contents: write
 jobs:
   github-metrics:
     runs-on: ubuntu-latest
+    # Don't re-run on the bot's own commits
+    if: ${{ !contains(github.event.head_commit.message, '[Skip GitHub Action]') }}
     steps:
-      - uses: lowlighter/metrics@latest
+      - uses: actions/checkout@v4
+
+      # Base metrics (header, activity, community, repositories, languages, metadata).
+      # Rendered with output_action: none so the file only lands in /metrics_renders
+      # and is merged with the notable render below before being committed.
+      - name: Render base metrics
+        uses: lowlighter/metrics@latest
         with:
           # Your GitHub token
           # The following scopes are required:
@@ -40,12 +50,20 @@ jobs:
           plugin_languages_threshold: 0%
           repositories: 40
           repositories_batch: 40
-          output_condition: data-changed
+          output_action: none
 
-      # Notable contributions is generated separately: its GraphQL query
-      # (repositoriesContributedTo, ordered by stargazers) is very expensive and
-      # times out when fetched with large batches, so it uses a much smaller one.
-      - uses: lowlighter/metrics@latest
+      # Notable contributions is rendered separately because its page size is
+      # tied to repositories_batch (the query uses data.shared["repositories.batch"]).
+      # The base render needs repositories_batch: 40 so the repositories plugin
+      # actually returns all 40 repos (it stops early when a page is smaller than
+      # `repositories`), which made notable fetch 40 contributed repos per request
+      # and time out. Rendering notable on its own lets it use the small batch it
+      # used successfully for years, while the base render keeps the full 40.
+      # Retries plus the merge step's fallback mean a rare failure never publishes
+      # the error placeholder and never fails the run.
+      - name: Render notable contributions
+        uses: lowlighter/metrics@latest
+        continue-on-error: true
         with:
           token: ${{ secrets.METRICS_TOKEN }}
           user: dnicolson
@@ -56,5 +74,24 @@ jobs:
           plugin_notable: yes
           plugin_notable_from: organization
           plugin_notable_types: commit
-          repositories_batch: 10
-          output_condition: data-changed
+          repositories_batch: 5
+          plugins_errors_fatal: yes
+          retries: 3
+          retries_delay: 60
+          output_action: none
+
+      # Merge both renders into a single github-metrics.svg
+      - name: Merge renders
+        run: node .github/merge-metrics.mjs /metrics_renders/github-metrics.svg /metrics_renders/github-metrics-notable.svg github-metrics.svg
+
+      - name: Commit changes
+        run: |
+          if git diff --quiet -- github-metrics.svg; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add github-metrics.svg
+          git commit -m "Update github-metrics.svg - [Skip GitHub Action]"
+          git push
