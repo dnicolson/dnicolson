@@ -10,7 +10,15 @@ jobs:
   github-metrics:
     runs-on: ubuntu-latest
     steps:
+      # GitHub's GraphQL API intermittently returns 502 for the expensive
+      # repositoriesContributedTo query used by the notable plugin. By default
+      # metrics swallows plugin errors (plugins_errors_fatal: no), renders the
+      # "Unexpected error" card and commits it without retrying. Treat plugin
+      # errors as fatal so the render is retried instead, and let the step fail
+      # quietly (continue-on-error) so that if every attempt fails we keep the
+      # previously committed SVG rather than publishing a broken one.
       - uses: lowlighter/metrics@latest
+        continue-on-error: true
         with:
           # Your GitHub token
           # The following scopes are required:
@@ -44,3 +52,6 @@ jobs:
           repositories: 40
           repositories_batch: 40
           output_condition: data-changed
+          plugins_errors_fatal: yes
+          retries: 8
+          retries_delay: 300
